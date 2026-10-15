@@ -4,7 +4,11 @@ Il progetto conserva la grafica, le 30 giornate e le 150 attività originali. Ri
 
 ## Stato della consegna
 
-La preparazione e i test locali sono completati. Il repository dedicato è https://github.com/Raffa269/ROSCIA (pubblico), inizialmente vuoto e indicato dal proprietario. **Non è stato effettuato un deployment**: a questa sessione non sono disponibili accessi operativi Supabase/Vercel. Non esiste ancora un URL pubblico verificato. Non considerare la cartella dist/ come una pubblicazione.
+**Sito pubblicato e verificato:** https://roscia-livid.vercel.app
+
+**Repository:** https://github.com/Raffa269/ROSCIA (pubblico).
+
+Supabase: progetto ROSCIA `zpstpgsayhxlddvqzeeo`, tabella e policy RLS applicate. Vercel: progetto `roscia` nel team Raffa, collegato al branch main. Variabili pubbliche configurate in Vercel; nessun token gestionale o service_role è incluso nella build. Login reale, salvataggi, refresh, due sessioni, backup/ripristino, offline e isolamento RLS sono stati verificati sul sito HTTPS.
 
 ## Sviluppo locale
 
@@ -62,9 +66,21 @@ Usare due account di prova separati e due sessioni browser indipendenti; non usa
 7. Verificare viewport mobile, selettore di tutti i 30 giorni, note, backup e login su browser mobile reale. L'emulazione Chromium locale non sostituisce un dispositivo fisico.
 8. Controllare HTTPS, console, risposte di rete, assenza di segreti negli asset e configurazione Auth dei redirect. Ripulire gli account di prova attraverso gli strumenti amministrativi sicuri.
 
-## Test eseguiti nella preparazione locale
+## Test eseguiti
 
-- 5 test Node/PostgreSQL superati: integrità dei contenuti/CSS/logo; policy RLS effettivamente eseguite su PostgreSQL embedded PGlite con due utenti e ruolo anonimo; idempotenza SQL; rifiuto chiavi segrete e configurazione Vercel incompleta.
-- 8 test Chromium superati: anteprima mobile, stati, campi, backup/ripristino, JSON non valido, login errato, due contesti browser, refresh, isolamento cache account, coda offline, risposte tardive e riapertura con rete realmente disattivata.
-- I test cloud del browser usano il vero SDK Supabase con risposte API simulate. Il database locale verifica RLS su PostgreSQL, **non sul progetto Supabase di produzione**.
-- Da eseguire: tutte le verifiche del sito pubblico, Auth/email e RLS Supabase reali, oltre a test su dispositivo mobile fisico.
+- 5 test Node/PostgreSQL superati: integrità esatta dei contenuti/CSS/logo, RLS su PostgreSQL embedded, idempotenza SQL, rifiuto chiavi segrete e configurazione Vercel incompleta.
+- 8 test Chromium locali superati: anteprima mobile, stati e campi, backup/ripristino, JSON malformato, login errato, due contesti browser, refresh, isolamento cache, offline e risposte tardive. Questi test locali usano API Supabase simulate.
+- 2 test Chromium **sul sito pubblico reale** superati: login email/password (anche errato), tutti gli stati, note attività e quattro campi del giorno, refresh con sessione persistente, backup/ripristino, sincronizzazione nei due sensi fra browser desktop/mobile, giorno 30, rete browser realmente disattivata con refresh offline e successiva sincronizzazione.
+- RLS **sul Supabase reale**: due account diversi; lettura di righe altrui vuota, INSERT negata (403), UPDATE di righe altrui senza effetti, accesso anonimo negato. RLS abilitata e forzata sulla tabella.
+- Asset pubblici serviti via HTTPS con risposta 200, chiave publishable verificata senza segreti, nessun errore JavaScript nei flussi testati. Screenshot mobile ispezionato; nessun overflow orizzontale a 390×844.
+- Due account temporanei confermati tramite API amministrativa sono stati creati per ciascuna esecuzione e poi eliminati insieme ai loro progressi. Nessun account di prova da usare per entrare nella dashboard.
+
+### Limiti precisi
+
+La vista mobile è emulata in Chromium: non è stato usato un telefono fisico. La consegna email di conferma/recupero non è stata verificata tramite una casella reale: i test hanno usato account temporanei già confermati e il login reale email/password. La conferma email è mantenuta attiva. Il provider email predefinito Supabase ha limiti di invio e destinatari; per utenti esterni all'organizzazione può essere necessario configurare un SMTP proprio in Supabase. Non sono state inserite credenziali SMTP inventate o disattivate le conferme.
+
+### Ripetere i test pubblici
+
+Con `SUPABASE_ACCESS_TOKEN` nelle impostazioni sicure, eseguire `python3 scripts/test-live.py`. Gli opzionali `ROSCIA_LIVE_URL` e `ROSCIA_PROJECT_REF` permettono di selezionare sito e progetto. Il token gestionale è usato solo verso api.supabase.com; la chiave amministrativa ottenuta resta in memoria per creare/eliminare gli utenti temporanei. Password e sessioni restano solo in memoria; trace browser disattivata nei test reali. Non registrare dump di ambiente o credenziali.
+
+Nel cloud Codex Chromium usa il proxy HTTPS dell'ambiente e deve fidarsi della CA fornita dalla piattaforma, registrata nel suo database NSS. Non disabilitare mai la verifica TLS. Il test include modifiche e ripristini ma usa soltanto account temporanei dedicati.

@@ -1,25 +1,36 @@
-# Verifiche eseguite e limiti
+# Verifiche della pubblicazione ROSCIA
 
-## Esito locale
+Sito HTTPS: https://roscia-livid.vercel.app
+Repository: https://github.com/Raffa269/ROSCIA
+Supabase: progetto ROSCIA `zpstpgsayhxlddvqzeeo`.
+Vercel: progetto `roscia`, team Raffa, branch `main`.
 
-Build statica completata, installazione riproducibile `npm ci` riuscita. 5 test Node/PostgreSQL e 8 test Chromium superati.
+## Eseguite
 
-- Integrità esatta di tutte le 30 giornate e 150 attività, del CSS originale e del logo.
-- PostgreSQL embedded PGlite: schema ripetibile, utente B non vede/modifica A, INSERT e cambio proprietario vietati, DELETE negata, ruolo anonimo senza accesso.
-- La build rifiuta chiavi segrete, JWT service_role e configurazione cloud assente su Vercel.
-- Anteprima mobile a 390×844, tutti i giorni accessibili, nessun overflow orizzontale; screenshot ispezionato.
-- Da fare, Parziale, Completa, note attività, decisioni, note giorno, link e risultati.
-- Due contesti Chromium indipendenti, refresh, persistenza, modifiche in entrambe le direzioni.
-- Cache separata per account e demo; niente importazione implicita di dati di un altro account.
-- Backup JSON, ripristino con azzeramento dei campi precedenti e rifiuto di file malformati.
-- Errore login e protezione da risposte di lettura tardive.
-- Coda di scrittura conservata dopo refresh, riconnessione e invio successivo.
-- Connessione browser realmente disattivata: riapertura della demo e persistenza usando la cache degli asset.
+- Installazione riproducibile npm ci e build statica completate.
+- 5 test Node/PostgreSQL e 8 test Chromium locali superati.
+- Integrità esatta delle 30 giornate, 150 attività, CSS originale e logo.
+- 2 test Chromium sul sito pubblico con il vero Supabase superati.
+- Login reale corretto e password errata, sessione dopo refresh e logout.
+- Da fare/Parziale/Completa, note attività, decisioni, note giorno, link e risultati.
+- Due browser indipendenti, desktop e mobile emulato, modifiche sincronizzate nei due sensi.
+- Backup JSON scaricato e ripristinato, anche azzerando stati prima valorizzati.
+- Rete browser realmente disabilitata: modifiche, refresh offline e invio al ritorno online.
+- Giorno 30 usato da mobile, nessun overflow orizzontale a 390×844, screenshot ispezionato.
+- Nessun errore JavaScript nei flussi di test pubblici.
+- RLS reale: B non legge righe di A, INSERT per A rifiutata con 403, UPDATE di A senza effetti, accesso anonimo negato. Flag RLS enabled/forced verificati nel database.
+- Tutti gli asset verificati rispondono HTTP 200 via HTTPS; nella configurazione distribuita compare solo la chiave pubblica.
+- Account di test e relativi progressi eliminati dopo ogni esecuzione.
 
-## Confini della verifica
+## Credenziali e limiti
 
-Nei test Chromium cloud il vero SDK Supabase usa API simulate, con dati fittizi e senza chiavi reali. Le policy SQL sono eseguite in PostgreSQL locale, non in un progetto Supabase remoto. La vista mobile è emulata, non verificata su telefono fisico.
+Token gestionali disponibili solo nelle impostazioni sicure dell'ambiente; nessuna password personale, service_role o chiave segreta salvata nel frontend o nel repository. La chiave amministrativa è usata solo in memoria dal runner dei test per utenti temporanei.
 
-Il repository dedicato indicato dal proprietario è https://github.com/Raffa269/ROSCIA . Non sono stati eseguiti deployment Vercel, migrazione Supabase remota, autenticazione email reale, verifica RLS remota o test del sito HTTPS pubblico. Gli accessi operativi non sono disponibili nella sessione. La guida contiene le verifiche da eseguire prima di dichiarare conclusa la pubblicazione.
+Il mobile è emulato, non un dispositivo fisico. La consegna delle email di conferma/recupero non è stata verificata tramite una casella reale. I test usano account temporanei confermati via API amministrativa e login email/password effettivo. La conferma email resta attiva; per destinatari esterni all'organizzazione Supabase può servire SMTP personalizzato.
 
-La configurazione dell'ambiente salvata è una bozza: non crea progetti, non contiene valori segreti e non prova che gli accessi siano stati applicati. Accesso GitHub al repository ROSCIA verificato; restano richiesti accessi Supabase/Vercel tramite integrazioni operative o impostazioni sicure.
+Il progetto Vercel secondario `roscia-7zol` non è quello usato per la pubblicazione verificata e non è stato eliminato.
+
+## Ripetibilità
+
+Test locali: npm run test:content e npm test.
+Test pubblici: python3 scripts/test-live.py (SUPABASE_ACCESS_TOKEN tramite impostazioni sicure). Il runner non stampa le credenziali e ripulisce gli utenti temporanei in finally. Chromium deve usare il proxy/CA fidati dell'ambiente, senza disattivare TLS.
