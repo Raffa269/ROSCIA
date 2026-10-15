@@ -11,6 +11,12 @@ create table if not exists public.roscia_tracker_values (
 );
 
 alter table public.roscia_tracker_values enable row level security;
+alter table public.roscia_tracker_values force row level security;
+
+-- Espliciti privilegi minimi: nessun accesso anonimo o cancellazione diretta.
+revoke all on public.roscia_tracker_values from anon;
+revoke all on public.roscia_tracker_values from authenticated;
+
 
 -- La policy consente lettura/scrittura soltanto al proprietario autenticato.
 drop policy if exists roscia_read_own on public.roscia_tracker_values;
@@ -33,3 +39,5 @@ create trigger roscia_values_updated before update on public.roscia_tracker_valu
 for each row execute function public.roscia_set_updated_at();
 
 grant select, insert, update on public.roscia_tracker_values to authenticated;
+
+revoke all on function public.roscia_set_updated_at() from public;

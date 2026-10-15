@@ -1,103 +1,70 @@
-# ROSCIA Growth Tracker — Pubblicazione online (circa 15–25 minuti)
+# ROSCIA Growth Tracker — GitHub, Supabase, Vercel
 
-Questo pacchetto contiene la **versione cloud** della dashboard esistente. Mantiene la grafica, le **30 giornate e tutte le 150 attività**; aggiunge account privato e sincronizzazione automatica tra PC.
+Il progetto conserva la grafica, le 30 giornate e le 150 attività originali. Rimane un'app statica con Supabase Auth e database PostgreSQL. Il contenuto editoriale è pubblico; progressi e registri sono privati per account.
 
-**Importante:** lo ZIP è pronto da pubblicare, ma non è ancora un sito online: bisogna creare un progetto Supabase e pubblicare la cartella su un servizio di hosting. Non è necessario programmare.
+## Stato della consegna
 
-## 1. Crea il database e l'accesso
+La preparazione e i test locali sono completati. **Non è stato effettuato un deployment**: a questa sessione non sono disponibili integrazioni operative Supabase/Vercel, l'API GitHub con l'autenticazione disponibile risponde Forbidden, la richiesta non autenticata a Supabase risponde 401 e quella a Vercel 403. Non esistono ancora un repository remoto dedicato o un URL pubblico verificato. Non considerare la cartella dist/ come una pubblicazione.
 
-1. Apri <https://supabase.com/dashboard>, registrati e scegli **New project**.
-2. Dai al progetto un nome, per esempio `roscia-tracker`, imposta una password robusta per il database e scegli preferibilmente una regione europea.
-3. Quando il progetto è pronto, apri **SQL Editor → New query**.
-4. Apri il file `database.sql`, copiane tutto il contenuto, incollalo nell'editor ed esegui con **Run**. La tabella usa **Row Level Security**: ogni utente vede solo i propri dati.
-5. Dal progetto Supabase apri **Project Settings → API Keys** oppure **Connect**, a seconda dell'interfaccia, e trova:
-   - **Project URL**, nel formato `https://xxxxxxxx.supabase.co`.
-   - **Publishable key** (`sb_publishable_...`) o **anon public key**.
-6. Apri il file `config.js` in un editor di testo e sostituisci le due stringhe vuote con i valori precedenti, senza eliminare le virgolette:
+## Sviluppo locale
 
-```js
-window.ROSCIA_CONFIG = {
-  supabaseUrl: "https://xxxxxxxx.supabase.co",
-  supabaseAnonKey: "sb_publishable_XXXXXXXXXXXXXXXX"
-};
+Richiede Node >=22 (verificato con Node 24.19.0), npm e Python 3 per il server dei test. Per i test browser serve Chromium; `CHROMIUM_PATH` può indicarne il percorso (predefinito `/usr/bin/chromium`).
+
+```sh
+npm ci
+npm run build
+npm run test:content
+npm test
+python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
 ```
 
-**Non inserire mai chiavi `service_role`, `sb_secret_...`, password di database o password personali nel file `config.js`.** La publishable key è progettata per essere pubblica; la protezione dei dati è garantita da autenticazione + RLS.
+Senza configurazione cloud la build locale offre l'anteprima nel browser. La build su Vercel fallisce esplicitamente se manca Supabase. Non caricare la directory sorgente come sito statico: distribuire solo l'output dist/ generato dalla build.
 
-## 2. Pubblica la dashboard su Internet
+## 1. Repository GitHub dedicato
 
-Il percorso più semplice è **Netlify Drop**, che permette di pubblicare direttamente una cartella di file statici:
+La cartella contiene già un repository Git locale, con importazione originale e modifiche separate. Quando l'integrazione GitHub dispone di permessi di creazione e scrittura, creare un repository dedicato preferibilmente privato, per esempio `roscia-growth-tracker`, e collegare il branch main. Non usare il repository IMMAGINI e non pubblicare file .env, credenziali, backup personali o tracce di test reali.
 
-1. Vai su <https://app.netlify.com/drop> e accedi.
-2. Trascina la **cartella `ROSCIA_WEBAPP` estratta** (contenente `index.html`, `cloud.js` e `config.js`), non il PDF e non uno ZIP ancora compresso.
-3. Netlify fornirà un indirizzo HTTPS pubblico, ad esempio `https://roscia-tracker-xyz.netlify.app`. Salvalo tra i preferiti su entrambi i PC.
-4. Controlla che il sito mostri la schermata «Accedi e sincronizza». Se mostra «Cloud da configurare», hai caricato la versione precedente oppure il file `config.js` non è stato modificato.
+## 2. Supabase
 
-### Autorizza l'URL per login e recupero password
+Usare un progetto dedicato o quello indicato dal proprietario. Eseguire `database.sql` nel SQL Editor: lo script è ripetibile. Crea la tabella `roscia_tracker_values`, tre policy RLS (SELECT/INSERT/UPDATE), trigger del timestamp e privilegi minimi. Non c'è DELETE: il ripristino sovrascrive con valori vuoti o `todo` i campi da azzerare. L'account anonimo non può leggere/scrivere; il ruolo autenticato può operare solo dove `auth.uid() = user_id`, anche quando tenta di cambiare il proprietario.
 
-1. Torna a **Supabase → Authentication → URL Configuration**.
-2. Imposta **Site URL** uguale all'indirizzo HTTPS esatto ottenuto da Netlify.
-3. Aggiungi a **Redirect URLs** l'indirizzo completo e, se necessario, una variante con `/**` per consentire la pagina di rientro dall'email. In questo progetto è sufficiente la pagina principale.
-4. Per proteggere la registrazione, puoi creare il tuo account e poi disattivare nuove registrazioni pubbliche in **Authentication → Providers → Email** (opzioni disponibili possono variare).
+Attivare Authentication → Email/password. Mantenere la conferma email abilitata salvo diversa scelta esplicita; verificare invio email e limiti del provider. Dopo aver ottenuto il dominio Vercel, impostarlo come Site URL e come URL di redirect consentito. Non autorizzare domini arbitrari. Per eventuali preview, autorizzare gli specifici URL effettivamente usati.
 
-## 3. Crea il tuo account
+Servono soltanto due valori pubblici per la build:
 
-1. Apri la dashboard Netlify, inserisci email e password e fai clic **Crea account**.
-2. Se il progetto Supabase richiede conferma email, apri il messaggio ricevuto e verifica l'indirizzo.
-3. Torna alla dashboard e fai clic **Accedi e sincronizza**.
-4. Da questo momento i cambiamenti si salvano sul database cloud senza premere un pulsante.
-5. Sul secondo computer apri **la stessa URL** e accedi **con la stessa email e password**.
+- `SUPABASE_URL`: URL HTTPS del progetto, senza slash finale.
+- `SUPABASE_PUBLISHABLE_KEY`: chiave `sb_publishable_...` oppure JWT legacy con ruolo `anon`.
 
-## 4. Se avevi già progressi nel vecchio tracker
+In alternativa i medesimi valori pubblici possono essere inseriti in `config.js`. Le variabili di build hanno precedenza. Una chiave `sb_secret_...` o un JWT `service_role` fa fallire la build. Password, token gestionali e service_role non devono essere inseriti nel frontend, nel repository o nei log. I token gestionali eventualmente necessari all'automazione restano esclusivamente nelle impostazioni sicure e non vengono letti dalla build.
 
-Il vecchio HTML salvava le modifiche sul PC. Quei dati **non vengono trasferiti automaticamente** a un dominio Internet diverso.
+## 3. Vercel
 
-1. Apri la vecchia dashboard sul PC dove avevi lavorato e premi **Backup JSON**.
-2. Apri la nuova dashboard online e accedi.
-3. Premi **Ripristina**, scegli il JSON appena esportato e conferma la sostituzione.
-4. Attendi lo stato **«✓ Cloud sincronizzato»** prima di chiudere la pagina.
-5. Apri la stessa dashboard sul secondo PC per verificare che il lavoro compaia.
+Importare il repository dedicato. Preset framework: Other; comando installazione `npm ci`; build `npm run build`; output `dist`. La configurazione è inclusa in `vercel.json`; usare Node 24. Impostare i due valori pubblici di Supabase come variabili Vercel negli ambienti da distribuire. Eseguire la pubblicazione, verificare l'esito del build e ottenere il dominio HTTPS. Completare la configurazione URL di Supabase usando quel dominio esatto.
 
-## 5. Test della sincronizzazione (2 minuti)
+La libreria Supabase è installata dal lockfile e inclusa negli asset; non è caricata da CDN. La service worker conserva solo asset pubblici dello stesso sito, mai risposte Auth o database. La cache permette la riapertura offline dopo un primo caricamento completo. Le sessioni cloud offline richiedono una precedente autenticazione e cache dell'account sul dispositivo; non è possibile un primo accesso senza rete. Se la sessione scade, il rinnovo richiede connettività. La cache locale è una comodità per dispositivi fidati, non un archivio cifrato: i dati restano sul dispositivo e il backup rimane consigliato.
 
-- PC A: Giorno 1, attività 1, imposta **Parziale** e scrivi una nota di prova.
-- Aspetta **«✓ Cloud sincronizzato»**.
-- PC B: apri la stessa URL, accedi e controlla Giorno 1. Se era già aperta, ricarica o attendi fino a 20 secondi.
-- PC B: imposta **Completa**, modifica una nota e attendi il simbolo di salvataggio.
-- PC A: ricarica: lo stato deve essere **Completa**.
+## 4. Entrare nella dashboard
 
-## Come funziona la sincronizzazione
+Aprire il dominio HTTPS pubblicato, inserire email e password e scegliere **Crea account**. Confermare l'email se richiesto e poi usare **Accedi e sincronizza**. Sul secondo browser usare lo stesso indirizzo del sito e lo stesso account. Le modifiche sono inviate circa un secondo dopo la digitazione; attendere **✓ Cloud sincronizzato**. Gli aggiornamenti remoti arrivano tornando sulla pagina oppure con il controllo ogni 20 secondi. Sullo stesso campo prevale l'ultima modifica ricevuta dal server.
 
-- Salvataggio automatico per singolo campo, circa 1 secondo dopo la modifica.
-- Il server riceve solo campi che sono cambiati, non l'intero documento a ogni battuta.
-- Le modifiche offline vengono conservate sullo stesso dispositivo se la sessione era stata già aperta e il browser dispone della sua cache; sono inviate quando torna la connessione.
-- Le modifiche su altri PC arrivano quando torni sulla pagina, con un controllo periodico di 20 secondi o dopo ricarica.
-- **Se modifichi esattamente lo stesso campo contemporaneamente su due PC, l'ultima modifica arrivata al server prevale.** Non usare due PC simultaneamente per modificare la stessa nota.
-- Il backup JSON resta consigliato periodicamente: non sostituisce il database cloud.
+Per migrare progressi precedenti: scaricare **Backup JSON** nella vecchia dashboard, accedere al nuovo account e usare **Ripristina**. La demo non viene mai importata implicitamente in un account; il ripristino richiede conferma e sostituisce i progressi correnti. Note, decisioni, link e risultati restano testo, senza eseguire HTML.
 
-## Sicurezza e manutenzione
+## 5. Verifica prima di dichiarare concluso il deployment
 
-- Il tuo sito Netlify è raggiungibile via URL; i **dati** sono visibili solo all'account autenticato grazie alle policy RLS.
-- Le **150 attività editoriali statiche** sono incluse nel codice e quindi non sono private: chiunque conosca l'URL può scaricare gli asset pubblici. Per proteggere anche il testo del piano occorre protezione aggiuntiva sull'hosting.
-- La tua password non viene gestita dal codice del tracker ma dall'autenticazione Supabase.
-- Usa il sito attraverso HTTPS; non usare account condivisi con terzi.
-- Se devi aggiornare la dashboard, modifica i file e ridistribuiscili su Netlify. I progressi restano in Supabase.
+Usare due account di prova separati e due sessioni browser indipendenti; non usare dati personali di produzione.
 
-## Risoluzione problemi
+1. Nel sito HTTPS reale, provare creazione account/conferma email, login errato/corretto, logout e recupero password.
+2. Nell'account A impostare ciascuno stato Da fare/Parziale/Completa; compilare nota attività, decisioni, note giorno, link e risultati. Attendere conferma e verificare refresh e riapertura browser.
+3. Accedere ad A sul secondo browser: verificare gli stessi valori, modificarli e controllare il ritorno sul primo. Provare modifiche a campi diversi e descrivere il comportamento sullo stesso campo.
+4. Esportare un backup JSON, cambiare alcuni dati, ripristinare e controllare anche i campi azzerati sul secondo browser. Provare file non valido senza perdere lo stato esistente.
+5. Staccare davvero la connessione dopo un accesso valido, modificare e ricaricare; ripristinare la rete e verificare l'invio della coda e il secondo browser.
+6. Con B verificare dashboard vuota. Usando la sessione autenticata B, tentare direttamente SELECT/INSERT/UPDATE su righe di A: lettura vuota e scritture negate o zero righe. Senza sessione, la tabella deve essere inaccessibile. Le sole verifiche visuali non bastano a provare RLS.
+7. Verificare viewport mobile, selettore di tutti i 30 giorni, note, backup e login su browser mobile reale. L'emulazione Chromium locale non sostituisce un dispositivo fisico.
+8. Controllare HTTPS, console, risposte di rete, assenza di segreti negli asset e configurazione Auth dei redirect. Ripulire gli account di prova attraverso gli strumenti amministrativi sicuri.
 
-- **Schermata «Cloud da configurare»** → controlla `config.js` e ripubblica la cartella modificata.
-- **Login funziona ma appare errore della tabella** → riesegui `database.sql` in Supabase, verifica nome tabella e RLS.
-- **Non arriva la mail di conferma** → controlla spam, configurazione Authentication email e limiti del provider di posta Supabase.
-- **Un PC non vede le modifiche** → controlla che gli account email corrispondano, che il primo indichi «✓ Cloud sincronizzato», poi ricarica il secondo.
-- **Pagina bianca** → verifica di aver caricato l'intera cartella, non solo `index.html`; apri la console del browser (F12) per eventuali errori.
-- **Errore caricamento Supabase** → la dashboard deve poter raggiungere la libreria JS remota e le API Supabase; estensioni ad-block possono impedirlo.
+## Test eseguiti nella preparazione locale
 
-## File del progetto
-
-- `index.html`: grafica e 150 attività originali.
-- `cloud.js`: autenticazione, cache offline e sincronizzazione automatica.
-- `config.js`: i due parametri pubblici del tuo progetto Supabase.
-- `database.sql`: tabella e regole di accesso ai dati.
-- `GUIDA_INSTALLAZIONE.md`: questa guida.
-
-Il sito non contiene analytics o pubblicità e non richiede alcun piano di abbonamento software per il codice stesso; hosting e database possono avere limiti e costi in base ai piani scelti.
+- 5 test Node/PostgreSQL superati: integrità dei contenuti/CSS/logo; policy RLS effettivamente eseguite su PostgreSQL embedded PGlite con due utenti e ruolo anonimo; idempotenza SQL; rifiuto chiavi segrete e configurazione Vercel incompleta.
+- 8 test Chromium superati: anteprima mobile, stati, campi, backup/ripristino, JSON non valido, login errato, due contesti browser, refresh, isolamento cache account, coda offline, risposte tardive e riapertura con rete realmente disattivata.
+- I test cloud del browser usano il vero SDK Supabase con risposte API simulate. Il database locale verifica RLS su PostgreSQL, **non sul progetto Supabase di produzione**.
+- Da eseguire: tutte le verifiche del sito pubblico, Auth/email e RLS Supabase reali, oltre a test su dispositivo mobile fisico.

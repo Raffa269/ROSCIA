@@ -22,20 +22,23 @@
   const configured = /^https:\/\/[a-z0-9.-]+\.supabase\.co\/?$/i.test((cfg.supabaseUrl || '').trim()) &&
     typeof cfg.supabaseAnonKey === 'string' && cfg.supabaseAnonKey.length > 30;
   let sb = null, userId = null, ready = false, demoMode = false;
-  let pending = {}, lastSeen = {}, busy = false, sendingTimer = null, reloadTimer = null;
-  let updateSeq = 0, dirtySince = 0, recoveringPassword = false;
+  let pending = {}, lastSeen = {}, busy = false, sendingTimer = null;
+  let updateSeq = 0, recoveringPassword = false;
+  let generation = 0, opening = false, pulling = false;
 
   function setMessage(v, error = false) {
     msg.textContent = v || '';
     msg.style.color = error ? '#ffaaa7' : '#cbe6c7';
   }
   function label(t, online = false) {
+    if (!storageOK && ready) t += ' · ⚠ copia locale non disponibile: conserva un backup';
     cloudLabel.textContent = t;
     saveLabel.textContent = t;
     accountBtn.textContent = userId ? '☁ Account · ' + (online ? 'connesso' : 'offline') : '☁ Connetti';
     accountBtn.classList.toggle('cloud-account-online', Boolean(userId && online));
     accountBtn.classList.toggle('cloud-account-offline', Boolean(userId && !online));
   }
+  function storageKey() { return userId ? localStoreKey() : demoMode ? KEY : null; }
   function localStoreKey() { return NAMESPACE + 'cache.' + userId; }
   function queueStoreKey() { return NAMESPACE + 'queue.' + userId; }
   function savePending() {
@@ -83,7 +86,9 @@
     save();
   }
   function onLocalSave() {
-    if (!ready || !userId || demoMode) return;
+    if (demoMode) { label(storageOK ? '⚠ Modalità locale · non sincronizzato' : '⚠ Memoria locale non disponibile'); return; }
+    if (!ready || !userId) return;
+    if (!storageOK) label('⚠ Memoria locale non disponibile · conserva un backup JSON');
     const current = asMap(state);
     let changed = 0;
     for (const key of Object.keys(current)) {
@@ -94,15 +99,16 @@
     }
     lastSeen = current;
     if (changed) {
-      dirtySince = Date.now();
       updateSeq++;
       savePending();
       try { localStorage.setItem(localStoreKey(), JSON.stringify(state)); } catch (_) {}
       label('● Modifiche in attesa di sincronizzazione');
       schedulePush();
+    } else {
+      label(Object.keys(pending).length ? '● Modifiche in attesa di sincronizzazione' : '✓ Cloud sincronizzato', navigator.onLine);
     }
   }
-  window.ROSCIA_CLOUD_ENGINE = { onLocalSave };
+  window.ROSCIA_CLOUD_ENGINE = { onLocalSave, storageKey };
 
   function schedulePush(delay = 1000) {
     clearTimeout(sendingTimer);
@@ -114,7 +120,7 @@
       if (ready && Object.keys(pending).length) label('● Modifiche conservate offline');
       return;
     }
-    const uid = userId;
+    const uid = userId, epoch = generation;
     const sent = {...pending};
     const keys = Object.keys(sent);
     if (!keys.length) { label('✓ Cloud sincronizzato', true); return; }
@@ -123,17 +129,19 @@
     try {
       // Small batches: safer on mobile and avoids giant POST payloads for imports.
       for (let n = 0; n < keys.length; n += 60) {
-        if (uid !== userId) throw new Error('Account cambiato durante il salvataggio.');
+        if (uid !== userId || epoch !== generation) return;
         const batch = keys.slice(n, n + 60).map(k => ({ user_id:uid, field_key:k, value:sent[k] }));
         const {error} = await sb.from('roscia_tracker_values').upsert(batch, { onConflict:'user_id,field_key' });
         if (error) throw error;
+        if (uid !== userId || epoch !== generation) return;
         // Do not remove newer changes made while this request was being sent.
         for (const k of keys.slice(n,n+60)) if (pending[k] === sent[k]) delete pending[k];
+        updateSeq++;
         savePending();
       }
-      if (uid === userId) label(Object.keys(pending).length ? '● Nuove modifiche in attesa' : '✓ Cloud sincronizzato', true);
+      if (uid === userId && epoch === generation) label(Object.keys(pending).length ? '● Nuove modifiche in attesa' : '✓ Cloud sincronizzato', true);
     } catch (err) {
-      if (uid === userId) label('⚠ Cloud non raggiungibile · dati conservati sul PC');
+      if (uid === userId && epoch === generation) label('⚠ Cloud non raggiungibile · dati conservati sul PC');
       console.warn('ROSCIA sync failed:', err);
     } finally {
       busy = false;
@@ -141,11 +149,13 @@
     }
   }
   async function pull() {
-    if (!sb || !userId || !navigator.onLine || busy) return;
-    const uid = userId;
+    if (!ready || !sb || !userId || !navigator.onLine || busy || pulling || Object.keys(pending).length) return;
+    const uid = userId, epoch = generation, seq = updateSeq;
+    pulling = true;
+    try {
     const {data, error} = await sb.from('roscia_tracker_values').select('field_key,value').eq('user_id', uid).range(0,999);
     if (error) throw error;
-    if (uid !== userId) return;
+    if (uid !== userId || epoch !== generation || seq !== updateSeq) return;
     const remote = {};
     for (const entry of data || []) remote[entry.field_key] = entry.value;
     const merged = {...asMap(initial()), ...remote, ...pending};
@@ -154,49 +164,44 @@
     const different = Object.keys(merged).some(key => String(merged[key]) !== String(now[key]));
     if (different) rehydrate(merged);
     else lastSeen = now;
+    if (!Object.keys(pending).length) label('✓ Cloud sincronizzato', true);
     return Object.keys(remote).length;
+    } finally { pulling = false; }
   }
   async function getSession() {
     const {data, error} = await sb.auth.getSession();
     if (error) throw error;
     return data.session;
   }
-  function countLocalEdits(s) {
-    const m = asMap(s);
-    return Object.entries(m).filter(([k, v]) => (k.endsWith(':status') ? v !== 'todo' : v !== '')).length;
-  }
   async function openAccount(session) {
+    if (userId === session.user.id && (ready || opening)) return;
+    const epoch = ++generation;
     userId = session.user.id;
+    opening = true;
+    demoMode = false;
     ready = false;
+    clearTimeout(sendingTimer);
     setMessage('Caricamento progressi…');
     gate.hidden = false;
     pending = {};
-    try { pending = JSON.parse(localStorage.getItem(queueStoreKey()) || '{}') || {}; } catch (_) { pending = {}; }
+    try {
+      const queued = JSON.parse(localStorage.getItem(queueStoreKey()) || '{}');
+      const defaults = asMap(initial());
+      for (const [k,v] of Object.entries(queued || {})) if (Object.hasOwn(defaults,k) && typeof v === 'string' && (!k.endsWith(':status') || ['todo','partial','done'].includes(v))) pending[k] = v;
+    } catch (_) { pending = {}; }
     try {
       // Check cloud before adopting any local content: do not leak someone else's data.
       const {data, error} = await sb.from('roscia_tracker_values').select('field_key,value').eq('user_id',userId).range(0,999);
       if (error) throw error;
+      if (epoch !== generation) return;
       const remote = {};
       for (const item of data || []) remote[item.field_key] = item.value;
-      const currentActivity = countLocalEdits(state);
-      const safeLocal = (() => { try { return JSON.parse(localStorage.getItem(localStoreKey()) || 'null'); } catch (_) { return null; } })();
-      const accountLocal = safeLocal && safeLocal.version === 1 ? asMap(safeLocal) : {};
-      // If first login on account and the user previously used offline tracker,
-      // offer one-time import rather than silently uploading legacy data.
-      if (!Object.keys(remote).length && !Object.keys(pending).length && !Object.keys(accountLocal).length && currentActivity) {
-        const importOld = confirm('Ho trovato progressi salvati in questa dashboard. Vuoi importarli in questo nuovo account cloud?\n\nOK = importa nel cloud. Annulla = inizia con 0 progressi.');
-        if (importOld) {
-          const oldMap = asMap(state);
-          for (const [k,v] of Object.entries(oldMap)) {
-            if (k.endsWith(':status') ? v !== 'todo' : v !== '') pending[k] = v;
-          }
-          savePending();
-        }
-      }
-      // Preserve unsent edits from this same account only.
-      const merged = {...asMap(initial()), ...remote, ...accountLocal, ...pending};
-      // Remote wins over old local cache for already synced fields.
-      Object.assign(merged, remote, pending);
+      // Only this account's pending fields may override the server. Legacy/demo
+      // data is imported explicitly through Backup/Ripristina, never implicitly.
+      const cached = (() => { try { return cleanState(JSON.parse(localStorage.getItem(localStoreKey()))); } catch (_) { return null; } })();
+      state = initial();
+      if (cached) state.selectedDay = cached.selectedDay;
+      const merged = {...asMap(initial()), ...remote, ...pending};
       rehydrate(merged);
       ready = true;
       demoMode = false;
@@ -205,37 +210,46 @@
       label(Object.keys(pending).length ? '● Modifiche in attesa' : '✓ Cloud sincronizzato', true);
       schedulePush(100);
     } catch (err) {
+      if (epoch !== generation) return;
       // Only permit offline editing with previously established cache for THIS user.
-      const cached = (() => { try { return JSON.parse(localStorage.getItem(localStoreKey()) || 'null'); } catch (_) { return null; } })();
+      const cached = (() => { try { return cleanState(JSON.parse(localStorage.getItem(localStoreKey()))); } catch (_) { return null; } })();
       if (cached && cached.version === 1 && typeof cached.tasks === 'object' && typeof cached.days === 'object') {
+        state = initial();
+        state.selectedDay = cached.selectedDay;
         const map = {...asMap(cached), ...pending};
         rehydrate(map);
         ready = true;
         gate.hidden = true;
         label('⚠ Offline: modifiche conservate sul PC');
+        schedulePush(4000);
       } else {
         ready = false;
         label('⚠ Impossibile accedere ai dati cloud');
         setMessage('Connessione al database non riuscita: '+(err.message || String(err))+'. Verifica di aver eseguito database.sql.', true);
       }
-    }
+    } finally { if (epoch === generation) opening = false; }
+  }
+  function clearAccount() {
+    ++generation;
+    clearTimeout(sendingTimer);
+    ready = false; opening = false; demoMode = false;
+    userId = null; pending = {}; lastSeen = {};
+    state = initial(); expandedNotes = {};
+    renderAll();
+    gate.hidden = false;
+    password.value = '';
+    label('● Non connesso');
   }
   async function signOut() {
     try {
       if (Object.keys(pending).length) await push();
       await sb.auth.signOut();
     } catch (e) { console.warn('Sign out:',e); }
-    ready = false;
-    userId = null;
-    pending = {};
-    lastSeen = {};
-    state = initial();
-    renderAll();
-    save();
-    gate.hidden = false;
-    label('● Non connesso');
+    clearAccount();
   }
   function allowDemo() {
+    if (userId || recoveringPassword) return;
+    state = initial(); load(); renderAll();
     demoMode = true;
     ready = false;
     gate.hidden = true;
@@ -287,16 +301,22 @@
         const {error} = await sb.auth.updateUser({password:password.value});
         if (error) throw error;
         recoveringPassword = false;
+        email.required = true; email.hidden = false;
+        document.querySelector('label[for=cloudEmail]').hidden = false;
+        signUp.hidden = false; forgot.hidden = false; demo.hidden = false;
         signIn.textContent = 'Accedi e sincronizza';
+        document.getElementById('cloudTitle').textContent = 'I tuoi 30 giorni, su tutti i dispositivi.';
+        document.getElementById('cloudDescription').textContent = 'Accedi con la stessa email sui tuoi computer. Le attività, le note e i risultati verranno sincronizzati automaticamente.';
         setMessage('Password aggiornata. Puoi accedere normalmente.');
         const session = await getSession();
-        if (session) await openAccount(session);
+        if (session) { clearAccount(); await openAccount(session); }
       } catch(err) { setMessage('Errore durante l’aggiornamento password: '+err.message, true); }
       finally { signIn.disabled = false; }
       return;
     }
     setMessage('Accesso in corso…');
     try {
+      password.autocomplete = 'current-password';
       const {data, error} = await sb.auth.signInWithPassword({email:email.value.trim(), password:password.value});
       if (error) throw error;
       await openAccount(data.session);
@@ -330,6 +350,11 @@
     // explicitly and session recovery once at startup.
     if (_event === 'PASSWORD_RECOVERY') {
       recoveringPassword = true;
+      ready = false;
+      email.required = false; email.hidden = true;
+      document.querySelector('label[for=cloudEmail]').hidden = true;
+      signUp.hidden = true; forgot.hidden = true; demo.hidden = true;
+      password.autocomplete = 'new-password';
       gate.hidden = false;
       form.hidden = false;
       signIn.textContent = 'Salva nuova password';
@@ -339,16 +364,20 @@
       password.focus();
     }
     if (!session && userId && _event === 'SIGNED_OUT') {
-      ready = false;userId = null;gate.hidden = false;label('● Sessione terminata');
+      clearAccount();
     }
+    if (_event === 'SIGNED_IN' && session) setTimeout(() => {
+      if (!recoveringPassword) openAccount(session).catch(err => setMessage(err.message, true));
+    }, 0);
   });
+  window.addEventListener('offline', () => { if (ready) label(Object.keys(pending).length ? '● Modifiche conservate offline' : '⚠ Offline · copia locale disponibile'); });
   window.addEventListener('online', () => { if (!ready) return; label('↻ Riconnessione…',true); schedulePush(100); setTimeout(() => pull().catch(console.warn), 3000); });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && ready) { push(); pull().catch(console.warn); }
   });
   window.addEventListener('beforeunload', () => {if (sendingTimer) clearTimeout(sendingTimer);});
   // Polling gives cross-device updates without needing database replication setup.
-  setInterval(() => {if (ready && document.visibilityState === 'visible' && !busy) pull().catch(console.warn);}, 20000);
+  setInterval(() => {if (ready && document.visibilityState === 'visible' && !busy) { if (Object.keys(pending).length) push(); else pull().catch(console.warn); }}, 20000);
   getSession().then(session => {
     if (session && !recoveringPassword) return openAccount(session);
     label('● Accedi per sincronizzare');

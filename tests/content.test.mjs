@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+const original=JSON.parse(await readFile('tests/original-integrity.json','utf8'));
+const hash=s=>createHash('sha256').update(s).digest('hex');
+const current=await readFile('index.html','utf8');
+const days=s=>JSON.parse(s.match(/const DAYS=(.*);/)[1]);
+test('30 giornate e 150 attività, testi originali identici',()=>{
+ assert.equal(hash(current.match(/const DAYS=(.*);/)[1]),original.days);assert.equal(days(current).length,30);assert.equal(days(current).reduce((n,d)=>n+d.steps.length,0),150);
+ assert.equal(hash(current.match(/<style>([\s\S]*?)<\/style>/)[1]),original.style);
+ assert.equal(hash(current.split('\n').find(l=>l.includes('<div class="logo">'))),original.logo);
+});
+test('RLS PostgreSQL: isolamento reale tra ruoli e utenti, privilegi minimi',async()=>{
+ const db=new PGlite();
+ await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+ const schema=await readFile('database.sql','utf8');await db.exec(schema);await db.exec(schema);
+ const a='00000000-0000-4000-8000-000000000001', b='00000000-0000-4000-8000-000000000002';
+ await db.exec(`insert into auth.users values ('${a}'),('${b}');set role authenticated;select set_config('request.jwt.claim.sub','${a}',false);insert into public.roscia_tracker_values(user_id,field_key,value) values ('${a}','d:1:notes','privato A');`);
+ await assert.rejects(db.exec(`insert into public.roscia_tracker_values(user_id,field_key,value) values ('${b}','d:1:notes','attacco');`), /row-level security/);
+ await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);
+ assert.equal((await db.query('select * from public.roscia_tracker_values')).rows.length,0);
+ await db.exec(`update public.roscia_tracker_values set value='rubato' where user_id='${a}';`);
+ await db.exec(`insert into public.roscia_tracker_values(user_id,field_key,value) values ('${b}','d:1:notes','privato B');`);
+ await assert.rejects(db.exec(`update public.roscia_tracker_values set user_id='${a}' where user_id='${b}';`), /row-level security/);
+ await assert.rejects(db.exec('delete from public.roscia_tracker_values;'), /permission denied/);
+ await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);
+ assert.deepEqual((await db.query('select value from public.roscia_tracker_values')).rows,[{value:'privato A'}]);
+ await db.exec('reset role;set role anon;');
+ await assert.rejects(db.query('select * from public.roscia_tracker_values'), /permission denied/);
+ await db.close();
+});

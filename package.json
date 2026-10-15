@@ -1,0 +1,21 @@
+{
+  "name": "roscia-growth-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "playwright test",
+    "test:content": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.99.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "@playwright/test": "1.58.2",
+    "esbuild": "0.27.3"
+  }
+}
