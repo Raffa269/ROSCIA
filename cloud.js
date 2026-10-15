@@ -67,7 +67,8 @@
       for (const f of FIELDS) if (map['d:' + d + ':' + f]) dd[f] = String(map['d:' + d + ':' + f]);
       if (Object.keys(dd).length) clean.days[d] = dd;
       for (let i = 0; i < 5; i++) {
-        const status = map['t:' + d + ':' + i + ':status'];
+        const rawStatus = map['t:' + d + ':' + i + ':status'];
+        const status = ['todo', 'partial', 'done'].includes(rawStatus) ? rawStatus : 'todo';
         const note = map['t:' + d + ':' + i + ':note'];
         if ((status && status !== 'todo') || note) clean.tasks[d + '_' + i] = {
           ...(status && status !== 'todo' ? {status} : {}), ...(note ? {note} : {})
@@ -319,6 +320,7 @@
       password.autocomplete = 'current-password';
       const {data, error} = await sb.auth.signInWithPassword({email:email.value.trim(), password:password.value});
       if (error) throw error;
+      password.value = '';
       await openAccount(data.session);
     } catch (err) { setMessage('Accesso non riuscito: '+(err.message || err), true); }
     finally { signIn.disabled = false; }
