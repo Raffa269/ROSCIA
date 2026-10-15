@@ -4,7 +4,7 @@ Il progetto conserva la grafica, le 30 giornate e le 150 attività originali. Ri
 
 ## Stato della consegna
 
-La preparazione e i test locali sono completati. **Non è stato effettuato un deployment**: a questa sessione non sono disponibili integrazioni operative Supabase/Vercel, l'API GitHub con l'autenticazione disponibile risponde Forbidden, la richiesta non autenticata a Supabase risponde 401 e quella a Vercel 403. Non esistono ancora un repository remoto dedicato o un URL pubblico verificato. Non considerare la cartella dist/ come una pubblicazione.
+La preparazione e i test locali sono completati. Il repository dedicato è https://github.com/Raffa269/ROSCIA (pubblico), inizialmente vuoto e indicato dal proprietario. **Non è stato effettuato un deployment**: a questa sessione non sono disponibili accessi operativi Supabase/Vercel. Non esiste ancora un URL pubblico verificato. Non considerare la cartella dist/ come una pubblicazione.
 
 ## Sviluppo locale
 
@@ -22,7 +22,7 @@ Senza configurazione cloud la build locale offre l'anteprima nel browser. La bui
 
 ## 1. Repository GitHub dedicato
 
-La cartella contiene già un repository Git locale, con importazione originale e modifiche separate. Quando l'integrazione GitHub dispone di permessi di creazione e scrittura, creare un repository dedicato preferibilmente privato, per esempio `roscia-growth-tracker`, e collegare il branch main. Non usare il repository IMMAGINI e non pubblicare file .env, credenziali, backup personali o tracce di test reali.
+Repository dedicato indicato dal proprietario: https://github.com/Raffa269/ROSCIA . Il branch main contiene l'importazione originale e le correzioni. Il repository è pubblico: i contenuti editoriali sono visibili; i progressi utente rimangono privati nel database quando Supabase è configurato. Non usare il repository IMMAGINI e non pubblicare file .env, credenziali, backup personali o tracce di test reali.
 
 ## 2. Supabase
 

@@ -11,4 +11,4 @@ npm run test:content
 npm test
 ```
 
-Il deployment remoto è ancora bloccato dagli accessi ai servizi. Nessun URL pubblico è stato generato o verificato. La configurazione di produzione impedisce la pubblicazione senza parametri Supabase pubblici validi.
+Repository dedicato: https://github.com/Raffa269/ROSCIA . Il deployment Vercel e la configurazione Supabase restano bloccati dagli accessi ai servizi. Nessun URL pubblico è stato generato o verificato. La configurazione di produzione impedisce la pubblicazione senza parametri Supabase pubblici validi.

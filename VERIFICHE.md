@@ -20,6 +20,6 @@ Build statica completata, installazione riproducibile `npm ci` riuscita. 5 test 
 
 Nei test Chromium cloud il vero SDK Supabase usa API simulate, con dati fittizi e senza chiavi reali. Le policy SQL sono eseguite in PostgreSQL locale, non in un progetto Supabase remoto. La vista mobile è emulata, non verificata su telefono fisico.
 
-Non sono stati eseguiti deployment Vercel, creazione repository GitHub remoto, migrazione Supabase remota, autenticazione email reale, verifica RLS remota o test del sito HTTPS pubblico. Gli accessi operativi non sono disponibili nella sessione. La guida contiene le verifiche da eseguire prima di dichiarare conclusa la pubblicazione.
+Il repository dedicato indicato dal proprietario è https://github.com/Raffa269/ROSCIA . Non sono stati eseguiti deployment Vercel, migrazione Supabase remota, autenticazione email reale, verifica RLS remota o test del sito HTTPS pubblico. Gli accessi operativi non sono disponibili nella sessione. La guida contiene le verifiche da eseguire prima di dichiarare conclusa la pubblicazione.
 
-La configurazione dell'ambiente salvata è una bozza: non crea progetti, non contiene valori segreti e non prova che gli accessi siano stati applicati. Richiesti accesso GitHub con creazione/scrittura e accessi Supabase/Vercel tramite integrazioni operative o impostazioni sicure.
+La configurazione dell'ambiente salvata è una bozza: non crea progetti, non contiene valori segreti e non prova che gli accessi siano stati applicati. Accesso GitHub al repository ROSCIA verificato; restano richiesti accessi Supabase/Vercel tramite integrazioni operative o impostazioni sicure.
